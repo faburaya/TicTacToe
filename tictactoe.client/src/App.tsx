@@ -1,58 +1,135 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import './App.css';
 
-interface Forecast {
-    date: string;
-    temperatureC: number;
-    temperatureF: number;
-    summary: string;
-}
+type Squares = Array<string|null>;
 
-function App() {
-    const [forecasts, setForecasts] = useState<Forecast[]>();
+export default function App() {
+    const [player, setPlayer] = useState("X");
+    const [board, setBoard] = useState(Array<string|null>(9).fill(null));
+    const [history, setHistory] = useState([board]);
 
-    useEffect(() => {
-        populateWeatherData();
-    }, []);
+    function handlePlay() {
+        setBoard(board.slice());
+        setHistory([...history, board]);
 
-    const contents = forecasts === undefined
-        ? <p><em>Loading... Please refresh once the ASP.NET backend has started. See <a href="https://aka.ms/jspsintegrationreact">https://aka.ms/jspsintegrationreact</a> for more details.</em></p>
-        : <table className="table table-striped" aria-labelledby="tableLabel">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Temp. (C)</th>
-                    <th>Temp. (F)</th>
-                    <th>Summary</th>
-                </tr>
-            </thead>
-            <tbody>
-                {forecasts.map(forecast =>
-                    <tr key={forecast.date}>
-                        <td>{forecast.date}</td>
-                        <td>{forecast.temperatureC}</td>
-                        <td>{forecast.temperatureF}</td>
-                        <td>{forecast.summary}</td>
-                    </tr>
-                )}
-            </tbody>
-        </table>;
-
-    return (
-        <div>
-            <h1 id="tableLabel">Weather forecast</h1>
-            <p>This component demonstrates fetching data from the server.</p>
-            {contents}
-        </div>
-    );
-
-    async function populateWeatherData() {
-        const response = await fetch('weatherforecast');
-        if (response.ok) {
-            const data = await response.json();
-            setForecasts(data);
+        if (player == "X") {
+            setPlayer("O");
+        } else {
+            setPlayer("X");
         }
     }
+
+    function goToMove(squares: Squares) {
+        setBoard(squares);
+    }
+
+    const moves = history.slice(1).map((squares, idx) => {
+        return (
+            <li key={idx}>
+                <button onClick={() => goToMove(squares)}>
+                    {"go to move #" + (idx + 1)}
+                </button>
+            </li>
+        );
+    });
+
+    return (
+        <div className="game">
+            <div className="game-board">
+                <Board board={board} player={player} onPlay={handlePlay} />
+            </div>
+            <div className="game-info">
+                <ol>{moves}</ol>
+            </div>
+        </div>
+    );
 }
 
-export default App;
+interface BoardAttributes {
+    board: Squares;
+    player: string;
+    onPlay(): void;
+}
+
+function Board(attributes: BoardAttributes) {
+    const [winner, setWinner] = useState<string|null>(null);
+    const [reds, setReds] = useState(Array<boolean>(9).fill(false));
+
+    function handleBoardClick(idx: number) {
+        if (winner || attributes.board[idx]) {
+            return;
+        }
+
+        attributes.board[idx] = attributes.player;
+
+        let winningLine = getWinningLine(attributes.board);
+        if (winningLine) {
+            const nextReds = reds.slice();
+            winningLine.forEach((k) => {
+                nextReds[k] = true;
+            });
+            setReds(nextReds);
+            setWinner(attributes.player);
+        } else if (attributes.board.every((value) => value !== null)) {
+            setWinner("NOBODY!");
+        }
+
+        attributes.onPlay();
+    }
+
+    return (
+        <>
+            <div className="status">
+                {winner ? "Winner is " + winner : "Next player: " + attributes.player}
+            </div>
+            {[0, 3, 6].map((offset, _) => (
+                <div className="board-row">
+                    {[0, 1, 2].map((idx, _) => (
+                        <Square
+                            value={attributes.board[offset + idx]}
+                            red={reds[offset + idx]}
+                            onClick={() => handleBoardClick(offset + idx)}
+                        />
+                    ))}
+                </div>
+            ))}
+        </>
+    );
+}
+
+interface SquareAttributes {
+    value: string|null;
+    red: boolean;
+    onClick(): void;
+}
+
+function Square(attributes: SquareAttributes) {
+    return (
+        <button
+            className={attributes.red === true ? "square winner" : "square"}
+            onClick={attributes.onClick}
+        >
+            {attributes.value}
+        </button>
+    );
+}
+
+function getWinningLine(board: Squares): number[]|null {
+    const lines = [
+        [0, 1, 2],
+        [3, 4, 5],
+        [6, 7, 8],
+        [0, 3, 6],
+        [1, 4, 7],
+        [2, 5, 8],
+        [0, 4, 8],
+        [2, 4, 6],
+    ];
+    for (let i = 0; i < lines.length; i++) {
+        const [a, b, c] = lines[i];
+        if (board[a] && board[a] === board[b] && board[b] === board[c]) {
+            return lines[i];
+        }
+    }
+    return null;
+}
